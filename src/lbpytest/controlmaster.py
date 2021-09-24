@@ -4,6 +4,7 @@ import sys
 import subprocess
 import select
 import time
+import uuid
 
 class TimeoutException(Exception):
     pass
@@ -27,7 +28,7 @@ class SSH:
         """
         self.user = user
         self.host = host
-        self.sockpath = os.path.join(basedir, 'controlmaster-'+host)
+        self.sockpath = os.path.join(basedir, 'controlmaster-'+self.host+'-'+uuid.uuid4().hex)
         self.timeout = timeout
         subprocess.run(['ssh', '-S', self.sockpath, '-l', self.user,
             '-f', # Requests ssh to go to background just before command execution.
