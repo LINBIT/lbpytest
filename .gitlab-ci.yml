@@ -1,0 +1,37 @@
+stages:
+    - test
+
+test:
+  stage: test
+  image: python:latest
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+
+  cache:
+    paths:
+      - .cache/pip
+      - venv/
+
+  services:
+    - name: chrboe/sshd:v0.1.1
+      alias: sshd
+
+  variables:
+    FF_NETWORK_PER_BUILD: 1
+    AUTHORIZED_KEYS: $CI_SSH_PUBLIC_KEY
+
+  before_script:
+    - python -V
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - |
+      set -x
+      mkdir -p ~/.ssh
+      echo "$CI_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+      chmod 0600 ~/.ssh/id_ed25519
+      ssh-keyscan sshd > ~/.ssh/known_hosts
+
+  script:
+    - pip install pytest-xdist
+    - pytest -v -n 10 src/lbpytest/ --host sshd
