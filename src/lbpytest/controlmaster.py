@@ -3,6 +3,10 @@ import os
 import sys
 import subprocess
 import select
+import time
+
+class TimeoutException(Exception):
+    pass
 
 class SSH:
     """
@@ -10,7 +14,7 @@ class SSH:
     exactly one connection and its corresponding ControlMaster socket.
     """
 
-    def __init__(self, host, user='root', basedir='/tmp'):
+    def __init__(self, host, user='root', basedir='/tmp', timeout=None):
         """
         The constructor immediately connects to a remote host and stores the
         ControlMaster socket in the local file system.
@@ -24,6 +28,7 @@ class SSH:
         self.user = user
         self.host = host
         self.sockpath = os.path.join(basedir, 'controlmaster-'+host)
+        self.timeout = timeout
         subprocess.run(['ssh', '-S', self.sockpath, '-l', self.user,
             '-f', # Requests ssh to go to background just before command execution.
             '-N', # Do not execute a remote command.
@@ -62,7 +67,7 @@ class SSH:
         # would actually have the variables set, but not command2.
         return "export {} && {}".format(parameters, cmd)
 
-    def run(self, cmd_string, stdin=False, stdout=None, stderr=None, env=None):
+    def run(self, cmd_string, stdin=False, stdout=None, stderr=None, env=None, timeout=None):
         """
         Execute a command over the ssh ControlMaster connection. The user is
         responsible for making sure that the ControlMaster connection is open
@@ -90,7 +95,7 @@ class SSH:
         """
         p = self.Popen(cmd_string, env)
 
-        self.pipeIO(p, stdin, stdout, stderr)
+        self.pipeIO(p, stdin, stdout, stderr, timeout=self.timeout if timeout is None else timeout)
 
         return p.wait()
 
@@ -117,7 +122,7 @@ class SSH:
         fl = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
-    def pipeIO(self, p, stdin=False, stdout=None, stderr=None):
+    def pipeIO(self, p, stdin=False, stdout=None, stderr=None, timeout=None):
         """
         Low-level interface to read/write standard streams of the process p
         to/from the file objects stdin, stdout and stderr.
@@ -129,17 +134,21 @@ class SSH:
 
         dest = { p.stdout: stdout, p.stderr: stderr }
 
+        start_time = time.time()
+
         if stdin:
             p.stdin.write(stdin.read().encode('utf-8'))
         p.stdin.close()
 
         def check_io():
-            ready_to_read = select.select([p.stdout, p.stderr], [], [], 1000)[0]
+            ready_to_read = select.select([p.stdout, p.stderr], [], [], 1)[0]
             for stream in ready_to_read:
                 # for non-blocking streams 'read()' just reads the available bytes
                 dest[stream].write(stream.read().decode('utf-8'))
 
         while p.poll() is None:
+            if timeout and time.time() - start_time >= timeout:
+                raise TimeoutException()
             check_io()
 
         check_io() # check again to catch anything after the process exits
