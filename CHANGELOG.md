@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.1 - 2021-10-22
+* Upload releases to PyPi automatically
+* No functional changes
+
 ## 0.2.0 - 2021-10-22
 * Add timeout to run function
 * Change socket path format to be unique per SSH instance
