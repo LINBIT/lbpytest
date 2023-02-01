@@ -1,5 +1,6 @@
 import fcntl
 import os
+import re
 import sys
 import subprocess
 import select
@@ -15,7 +16,7 @@ class SSH:
     exactly one connection and its corresponding ControlMaster socket.
     """
 
-    def __init__(self, host, user='root', basedir='/tmp', timeout=None):
+    def __init__(self, host, user='root', basedir='/tmp', timeout=None, connection_timeout=None):
         """
         The constructor immediately connects to a remote host and stores the
         ControlMaster socket in the local file system.
@@ -25,17 +26,42 @@ class SSH:
         :param basedir: the base directory where the ControlMaster socket will
             be stored; defaults to 'tmp'. The format of the file name is
             'controlmaster-$host', where $host is the host parameter
+        :param timeout: the default timeout for subsequent calls to ``run()``
+        :param connection_timeout: the timeout for the connection attempt;
+            defaults to ``timeout``
+        :raises subprocess.CalledProcessError: When the ssh connection cannot
+            be established. The exception contains the captured stdout and
+            stderr from the ssh command.
         """
         self.user = user
         self.host = host
         self.sockpath = os.path.join(basedir, 'controlmaster-'+self.host+'-'+uuid.uuid4().hex)
         self.timeout = timeout
+
+        # With the combination of flags below, older versions of ssh fail to
+        # close stderr. This was fixed in release 8.5 by
+        # https://github.com/openssh/openssh-portable/commit/396d32f3a1a16e54df2a76b2a9b237868580dcbe
+        # Verify that we are not using a broken version.
+        p = subprocess.run(['ssh', '-V'], check=True, capture_output=True)
+        output = p.stderr.decode('utf-8').strip()
+
+        version_match = re.search(r'([0-9]+)\.([0-9]+)', output)
+        if not version_match:
+            raise RuntimeError("failed to find ssh version in: '{}'".format(output))
+
+        major = int(version_match.group(1))
+        minor = int(version_match.group(2))
+        if major < 8 or (major == 8 and minor < 5):
+            raise RuntimeError("unsupported ssh version: '{}'".format(output))
+
         subprocess.run(['ssh', '-S', self.sockpath, '-l', self.user,
-            '-f', # Requests ssh to go to background just before command execution.
-            '-N', # Do not execute a remote command.
-            '-M', # Places the ssh client into "master" mode for connection sharing.
-            self.host,
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                '-f', # Requests ssh to go to background just before command execution.
+                '-N', # Do not execute a remote command.
+                '-M', # Places the ssh client into "master" mode for connection sharing.
+                self.host],
+            check=True,
+            capture_output=True,
+            timeout=timeout if connection_timeout is None else connection_timeout)
 
     def close(self):
         """

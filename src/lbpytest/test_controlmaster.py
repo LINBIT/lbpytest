@@ -2,7 +2,8 @@
 
 from .controlmaster import SSH, TimeoutException
 from io import StringIO
-import time
+import re
+import subprocess
 import pytest
 
 def test_basic_echo(host):
@@ -77,3 +78,10 @@ def test_env(host):
     ssh.close()
     assert ret == 0
     assert output.getvalue() == expect
+
+def test_init_stderr():
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        SSH('server.invalid')
+    # Expect some information about the invalid hostname
+    expected_re = r'\bhostname\b'
+    assert re.search(expected_re, excinfo.value.stderr.decode('utf-8')) is not None

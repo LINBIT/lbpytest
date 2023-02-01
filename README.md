@@ -17,8 +17,14 @@ pip install lbpytest
 ```python
 from lbpytest.controlmaster import SSH
 from io import StringIO
+import subprocess
+import sys
 
-ssh = SSH("myhost.example.org")
+try:
+    ssh = SSH("myhost.example.org")
+except subprocess.CalledProcessError as e:
+    print(e.stderr.decode('utf-8'), file=sys.stderr)
+    raise e
 
 # Run command using the hosts stdin/stdout/stderr
 ssh.run("echo 'Hello, World!'")
