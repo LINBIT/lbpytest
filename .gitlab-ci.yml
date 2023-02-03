@@ -3,7 +3,9 @@ stages:
 
 test:
   stage: test
-  image: python:latest
+  image:
+    name: $LINBIT_DOCKER_REGISTRY/drbd-reactor-e2e:latest
+    entrypoint: [""]
   rules:
     - if: $CI_MERGE_REQUEST_ID
 
@@ -21,8 +23,8 @@ test:
     AUTHORIZED_KEYS: $CI_SSH_PUBLIC_KEY
 
   before_script:
-    - python -V
-    - pip install virtualenv
+    - python3 -V
+    - pip3 install virtualenv
     - virtualenv venv
     - source venv/bin/activate
     - |
