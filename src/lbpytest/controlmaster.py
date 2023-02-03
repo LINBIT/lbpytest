@@ -1,3 +1,4 @@
+import codecs
 import fcntl
 import os
 import re
@@ -159,7 +160,9 @@ class SSH:
         if stdin is None:
             stdin = sys.stdin
 
-        dest = { p.stdout: stdout, p.stderr: stderr }
+        decoder_class = codecs.getincrementaldecoder("utf-8")
+        dest = { p.stdout: (decoder_class(), stdout),
+                p.stderr: (decoder_class(), stderr) }
 
         start_time = time.time()
 
@@ -170,8 +173,10 @@ class SSH:
         def check_io():
             ready_to_read = select.select([p.stdout, p.stderr], [], [], 1)[0]
             for stream in ready_to_read:
+                decoder, out = dest[stream]
                 # for non-blocking streams 'read()' just reads the available bytes
-                dest[stream].write(stream.read().decode('utf-8'))
+                data = stream.read()
+                out.write(decoder.decode(data))
 
         while p.poll() is None:
             if timeout and time.time() - start_time >= timeout:

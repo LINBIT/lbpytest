@@ -40,6 +40,15 @@ def test_many_lines(host):
     assert len(output.getvalue()) == len(expect)
     assert output.getvalue() == expect
 
+def test_split_utf8(host):
+    ssh = SSH(host)
+    output = StringIO()
+    ret = ssh.run("""bash -c 'printf "\\xf0\\x9f" ; sleep 1 ; printf "\\x98\\x80"'""", stdout=output)
+    print(output.getvalue())
+    ssh.close()
+    assert ret == 0
+    assert len(output.getvalue()) == 1
+
 def test_stdin(host):
     ssh = SSH(host)
     output = StringIO()
