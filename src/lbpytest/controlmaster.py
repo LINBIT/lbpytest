@@ -163,6 +163,7 @@ class SSH:
         decoder_class = codecs.getincrementaldecoder("utf-8")
         dest = { p.stdout: (decoder_class(), stdout),
                 p.stderr: (decoder_class(), stderr) }
+        read_list = [p.stdout, p.stderr]
 
         start_time = time.time()
 
@@ -171,16 +172,18 @@ class SSH:
         p.stdin.close()
 
         def check_io():
-            ready_to_read = select.select([p.stdout, p.stderr], [], [], 1)[0]
+            ready_to_read = select.select(read_list, [], [], 1)[0]
             for stream in ready_to_read:
                 decoder, out = dest[stream]
                 # for non-blocking streams 'read()' just reads the available bytes
                 data = stream.read()
-                out.write(decoder.decode(data))
+                if data:
+                    out.write(decoder.decode(data))
+                else:
+                    # end of file
+                    read_list.remove(stream)
 
-        while p.poll() is None:
+        while read_list:
             if timeout and time.time() - start_time >= timeout:
                 raise TimeoutException()
             check_io()
-
-        check_io() # check again to catch anything after the process exits
