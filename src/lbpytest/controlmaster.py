@@ -1,4 +1,3 @@
-import codecs
 import fcntl
 import os
 import re
@@ -7,6 +6,8 @@ import subprocess
 import select
 import time
 import uuid
+
+from .incremental_line_split import IncrementalLineSplitter
 
 class TimeoutException(Exception):
     pass
@@ -160,9 +161,8 @@ class SSH:
         if stdin is None:
             stdin = sys.stdin
 
-        decoder_class = codecs.getincrementaldecoder("utf-8")
-        dest = { p.stdout: (decoder_class(), stdout),
-                p.stderr: (decoder_class(), stderr) }
+        dest = { p.stdout: (IncrementalLineSplitter(), stdout),
+                p.stderr: (IncrementalLineSplitter(), stderr) }
         read_list = [p.stdout, p.stderr]
 
         start_time = time.time()
@@ -174,11 +174,12 @@ class SSH:
         def check_io():
             ready_to_read = select.select(read_list, [], [], 1)[0]
             for stream in ready_to_read:
-                decoder, out = dest[stream]
+                splitter, out = dest[stream]
                 # for non-blocking streams 'read()' just reads the available bytes
                 data = stream.read()
                 if data:
-                    out.write(decoder.decode(data))
+                    for line_bytes in splitter.split(data):
+                        out.write(line_bytes.decode('utf-8') + '\n')
                 else:
                     # end of file
                     read_list.remove(stream)
@@ -187,3 +188,8 @@ class SSH:
             if timeout and time.time() - start_time >= timeout:
                 raise TimeoutException()
             check_io()
+
+        # Write any remaining data in case the output did not terminate with a
+        # line break.
+        for splitter, out in dest.values():
+            out.write(splitter.read_remaining().decode('utf-8'))
