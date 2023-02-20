@@ -37,6 +37,31 @@ print(output.getvalue()) # prints Hello, World!
 ssh.close()
 ```
 
+### [Logscan](./src/lbpytest/logscan.py)
+
+See [`test_logscan.py`](./src/lbpytest/test_logscan.py) and
+[`test_logscan_ssh.py`](./src/lbpytest/test_logscan_ssh.py).
+
+## Testing
+
+The unit tests for this project can be run using `pytest`:
+
+```
+$ pytest src/lbpytest
+```
+
+Note that for the `ControlMaster` tests, a `--host` option is required. This should specify the IP address or hostname
+of an SSH server to use for the test.
+
+## Type Checking
+
+This library uses [type annotations](https://docs.python.org/3/library/typing.html).
+The [mypy](http://mypy-lang.org/) tool can be used to verify these annotations:
+
+```
+$ mypy src/lbpytest
+```
+
 ## License
 
 [Apache License 2.0](https://choosealicense.com/licenses/apache-2.0/)

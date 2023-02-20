@@ -13,17 +13,9 @@ class IncrementalLineSplitter(object):
 
     def split(self, s: bytes) -> list[bytes]:
         self.buffer += s
-
-        lines = []
-        line_start = 0
-
-        for i in range(len(self.buffer)):
-            if self.buffer[i] == 0x0a:
-                lines.append(self.buffer[line_start:i])
-                line_start = i + 1
-
-        self.buffer = self.buffer[line_start:]
-        return lines
+        lines = self.buffer.split(b'\n')
+        self.buffer = lines[-1]
+        return lines[:-1]
 
     def has_remaining(self) -> bool:
         return self.buffer != b''
