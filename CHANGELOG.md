@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.3.0 - 2023-02-24
+* controlmaster: capture output from failed ssh connection attempts
+* controlmaster: read until stdout and stderr reach end-of-file
+* controlmaster: split output streams by lines
+* Add logscan module for matching patterns in multiple input streams
+
 ## 0.2.1 - 2021-10-22
 * Upload releases to PyPi automatically
 * No functional changes
