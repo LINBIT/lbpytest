@@ -18,7 +18,7 @@ class SSH:
     exactly one connection and its corresponding ControlMaster socket.
     """
 
-    def __init__(self, host, user='root', basedir='/tmp', timeout=None, connection_timeout=None):
+    def __init__(self, host, user='root', basedir='/tmp', timeout=None, connection_timeout=None, ssh_config=None):
         """
         The constructor immediately connects to a remote host and stores the
         ControlMaster socket in the local file system.
@@ -31,6 +31,10 @@ class SSH:
         :param timeout: the default timeout for subsequent calls to ``run()``
         :param connection_timeout: the timeout for the connection attempt;
             defaults to ``timeout``
+        :param ssh_config: path to the ssh config file.
+            defaults to None (do not pass a -F argument)
+            useful value is /etc/ssh/ssh_config.virter for a virter generated
+            config.
         :raises subprocess.CalledProcessError: When the ssh connection cannot
             be established. The exception contains the captured stdout and
             stderr from the ssh command.
@@ -39,6 +43,7 @@ class SSH:
         self.host = host
         self.sockpath = os.path.join(basedir, 'controlmaster-'+self.host+'-'+uuid.uuid4().hex)
         self.timeout = timeout
+        self.ssh_config = ssh_config
 
         # With the combination of flags below, older versions of ssh fail to
         # close stderr. This was fixed in release 8.5 by
@@ -56,7 +61,14 @@ class SSH:
         if major < 8 or (major == 8 and minor < 5):
             raise RuntimeError("unsupported ssh version: '{}'".format(output))
 
-        subprocess.run(['ssh', '-S', self.sockpath, '-l', self.user,
+        user_args = []
+        if self.user:
+            user_args += ['-l', self.user]
+        config_args = []
+        if self.ssh_config:
+            config_args += ['-F', self.ssh_config]
+
+        subprocess.run(['ssh', '-S', self.sockpath] + user_args + config_args + [
                 '-f', # Requests ssh to go to background just before command execution.
                 '-N', # Do not execute a remote command.
                 '-M', # Places the ssh client into "master" mode for connection sharing.
