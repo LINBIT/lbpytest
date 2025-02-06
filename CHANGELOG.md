@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.4.0 - 2025-02-06
+* controlmaster: allow ssh config file to be specified
+
 ## 0.3.0 - 2023-02-24
 * controlmaster: capture output from failed ssh connection attempts
 * controlmaster: read until stdout and stderr reach end-of-file
