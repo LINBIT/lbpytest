@@ -1,6 +1,5 @@
 import fcntl
 import os
-import re
 import sys
 import subprocess
 import select
@@ -45,22 +44,6 @@ class SSH:
         self.timeout = timeout
         self.ssh_config = ssh_config
 
-        # With the combination of flags below, older versions of ssh fail to
-        # close stderr. This was fixed in release 8.5 by
-        # https://github.com/openssh/openssh-portable/commit/396d32f3a1a16e54df2a76b2a9b237868580dcbe
-        # Verify that we are not using a broken version.
-        p = subprocess.run(['ssh', '-V'], check=True, capture_output=True)
-        output = p.stderr.decode('utf-8').strip()
-
-        version_match = re.search(r'([0-9]+)\.([0-9]+)', output)
-        if not version_match:
-            raise RuntimeError("failed to find ssh version in: '{}'".format(output))
-
-        major = int(version_match.group(1))
-        minor = int(version_match.group(2))
-        if major < 8 or (major == 8 and minor < 5):
-            raise RuntimeError("unsupported ssh version: '{}'".format(output))
-
         user_args = []
         if self.user:
             user_args += ['-l', self.user]
@@ -68,14 +51,41 @@ class SSH:
         if self.ssh_config:
             config_args += ['-F', self.ssh_config]
 
-        subprocess.run(['ssh', '-S', self.sockpath] + user_args + config_args + [
-                '-f', # Requests ssh to go to background just before command execution.
+        # Start ssh without -f: we manage backgrounding ourselves to avoid
+        # pipe FD issues with ssh's daemon() in container environments.
+        self.master_process = subprocess.Popen(
+            ['ssh', '-S', self.sockpath] + user_args + config_args + [
                 '-N', # Do not execute a remote command.
                 '-M', # Places the ssh client into "master" mode for connection sharing.
                 self.host],
-            check=True,
-            capture_output=True,
-            timeout=timeout if connection_timeout is None else connection_timeout)
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE)
+
+        # Poll until the control socket is ready or ssh fails.
+        ct = timeout if connection_timeout is None else connection_timeout
+        deadline = None if ct is None else time.time() + ct
+        while True:
+            ret = self.master_process.poll()
+            if ret is not None:
+                raise subprocess.CalledProcessError(
+                    ret, self.master_process.args, output=b'',
+                    stderr=self.master_process.stderr.read())
+
+            check = subprocess.run(
+                ['ssh', '-S', self.sockpath, '-O', 'check', '_'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if check.returncode == 0:
+                break
+
+            if deadline is not None and time.time() >= deadline:
+                self.master_process.kill()
+                self.master_process.wait()
+                raise subprocess.CalledProcessError(
+                    255, self.master_process.args, output=b'',
+                    stderr=b'SSH connection timed out\n' + self.master_process.stderr.read())
+
+            time.sleep(0.1)
 
     def close(self):
         """
@@ -89,6 +99,9 @@ class SSH:
             if e.returncode == 255:
                 # socket not found, so it is probably already closed
                 pass
+        if hasattr(self, 'master_process'):
+            self.master_process.terminate()
+            self.master_process.wait()
 
     @staticmethod
     def inline_env(cmd, env):
