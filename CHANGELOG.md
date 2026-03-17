@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-03-17
+* controlmaster: avoid using "ssh -f"
+
 ## 0.4.0 - 2025-02-06
 * controlmaster: allow ssh config file to be specified
 
