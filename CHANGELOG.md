@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.1 - 2026-03-17
+* Update tools for releasing to PyPi automatically
+* No functional changes
+
 ## 0.5.0 - 2026-03-17
 * controlmaster: avoid using "ssh -f"
 
